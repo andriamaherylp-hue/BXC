@@ -1,75 +1,49 @@
-# DXC Platform — React + Django + PostgreSQL
+# BXC Sandbox — React + Django
 
-This repository is a clean-room implementation inspired by the **layout and interaction patterns** in the reference screenshots, while using original branding and original code.
+This repository is an original clean-room implementation based on user-supplied screenshots and requested interaction patterns. It does **not** copy third-party source bundles and intentionally keeps financial activity in a sandbox/demo mode.
 
-It includes:
-- React/Vite frontend
-- Django backend
-- PostgreSQL support
-- Username/password login
-- Registration by email or phone
-- Verification codes by email or SMS
-- Language menu: English, 日本語, 한국어, Deutsch, français, Italiano, Español, العربية, 繁體中文, 简体中文
-- Staff-only account administration page
-- Responsive post-login landing page
-- Render blueprint (`render.yaml`)
+## Included
 
-## Important branding note
-The project intentionally uses the original placeholder brand **DXC** instead of copying a third-party financial site's logo or identity. If you own or are authorized to use another brand, update `VITE_APP_NAME` and your own authorized assets.
+- Existing login and email/phone registration flow
+- 10-language selector
+- Post-login home layout inspired by the supplied BXC screenshots
+- Market tabs: Crypto, Forex, Stocks, Futures
+- Market detail pages with an original SVG candlestick demo chart
+- Crypto ETF watchlist-style page
+- Loan calculator demo + account verification request
+- Financial products visual demo
+- Account page with account code, zero-value sandbox balances, demo order history, settings, password change and logout
+- Staff dashboard with user search, suspend/restore, verify/unverify, and overview KPIs
+- Demo orders stored in PostgreSQL/SQLite as simulations only
 
-## Local setup
+## Safety boundary
 
-### 1) Backend
+The project does not implement real-money deposits, withdrawals, brokerage execution, lending, promised investment returns, or admin balance manipulation. Buttons that resemble those flows are demo-only and clearly explain that no real funds move.
+
+## Important security note
+
+Never commit passwords, SMTP credentials, Render keys, Twilio keys, `DATABASE_URL`, or Django `SECRET_KEY`. Use Render Environment Variables.
+
+## Update an existing deployment
+
 ```powershell
-cd backend
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-copy .env.example .env
-python manage.py migrate
-python manage.py createsuperuser
-python manage.py runserver
+cd "C:\Users\Piment Rouge\Documents\dxc-platform-complete"
+$git = "C:\Program Files\Git\cmd\git.exe"
+& $git status
+& $git add -A
+& $git diff --cached --check
+& $git commit -m "Add BXC post-login sandbox interface"
+& $git push origin main
 ```
 
-### 2) Frontend
-Open another terminal:
-```powershell
-cd frontend
-npm install
-npm run dev
-```
+Render should auto-deploy `main` when Auto Deploy is enabled.
 
-Vite runs on http://localhost:5173 and proxies `/api` and `/django-admin` to Django on port 8000.
+## Database migration
 
-## Verification codes
+The update adds migration `accounts.0002_profile_demo_fields_demoorder`. The existing `build.sh` runs `python manage.py migrate` during deployment.
 
-### Development
-- Email codes are printed to the Django console.
-- SMS codes are printed to the Django console when `SMS_BACKEND=console`.
-- In `DEBUG=1`, the API also returns `dev_code` so the frontend can display it for local testing.
+## Admin
 
-### Production email
-Configure SMTP variables in Render:
-- `EMAIL_HOST`
-- `EMAIL_PORT`
-- `EMAIL_HOST_USER`
-- `EMAIL_HOST_PASSWORD`
-- `EMAIL_USE_TLS=1`
-- `DEFAULT_FROM_EMAIL`
+Staff/superusers can open `/admin` for the custom dashboard and `/django-admin/` for Django's technical administration.
 
-### Production SMS with Twilio
-Set:
-- `SMS_BACKEND=twilio`
-- `TWILIO_ACCOUNT_SID`
-- `TWILIO_AUTH_TOKEN`
-- `TWILIO_FROM_NUMBER`
-
-## Render
-Create a new GitHub repository for this project, push it, then use the included `render.yaml` as a Blueprint. It creates:
-- `dxc-web`
-- `dxc-db`
-
-The generated database connection is injected into `DATABASE_URL`.
-
-## Build model
-The Vite build is written into `backend/static/frontend`. Django + WhiteNoise serve the React bundle, so production requires only **one web service plus one PostgreSQL database**.
+Rotate any passwords that have ever been pasted into chat, logs, screenshots, or public issues before continuing production deployment.

@@ -64,7 +64,7 @@ export default function RegisterPage({ i18n, onLogin }) {
           <p>Complete your registration and unlock a clean, responsive account experience designed for modern web access.</p>
         </section>
       </div>
-      <footer className="auth-footer">© 2026 DXC. All rights reserved.</footer>
+      <footer className="auth-footer">© 2026 BXC Sandbox. All rights reserved.</footer>
     </main>
   )
 }

@@ -40,7 +40,7 @@ export default function LoginPage({ i18n, onLogin }) {
           <div className="magnifier"><div className="lens"/><div className="handle"/></div>
         </section>
       </div>
-      <footer className="auth-footer">© 2026 DXC. All rights reserved.</footer>
+      <footer className="auth-footer">© 2026 BXC Sandbox. All rights reserved.</footer>
     </main>
   )
 }

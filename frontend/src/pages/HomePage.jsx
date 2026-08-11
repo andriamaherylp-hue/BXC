@@ -1,18 +1,52 @@
 import { Link } from 'react-router-dom'
-import Brand from '../components/Brand'
-import LanguageMenu from '../components/LanguageMenu'
+import AppHeader from '../components/AppHeader'
+import SiteFooter from '../components/SiteFooter'
 
-function PhoneMock({ large=false }) {
-  return <div className={`phone-mock ${large ? 'large' : ''}`}><div className="phone-top">● ●</div><div className="balance-box">155,846 USD</div><div className="chart-lines"><i/><i/><i/><i/><i/></div><div className="mock-buttons"><span/><span/></div><div className="mock-list">{[1,2,3,4].map(i=><b key={i}/>)}</div></div>
+function PhoneMock({ detail=false }) {
+  return <div className={`home-phone ${detail?'detail-phone':''}`}>
+    <div className="home-phone-status"><span>9:41</span><span>◔ ◔ ▰</span></div>
+    <div className="home-phone-title">{detail?'BTC/USD':'Markets'}</div>
+    {detail ? <>
+      <div className="phone-summary"><b>133,546 USDT</b><small>-2.46%</small></div>
+      <div className="phone-candle-grid">{Array.from({length:23}).map((_,i)=><i key={i} className={i%3===0?'green':''} style={{height:`${30+((i*17)%90)}px`}}/>)}</div>
+      <div className="phone-bottom-buttons"><span>Futures</span><span>Options</span></div>
+      <div className="phone-black-row"/><div className="phone-black-row"/><div className="phone-black-row"/>
+    </> : <>
+      <div className="phone-tabs"><b>Watchlist</b><span>Forex</span><span>Crypto</span></div>
+      <div className="phone-asset-cards"><span>BTC<br/><b>$17,147</b></span><span>ETH<br/><b>$1,262</b></span><span>DASH<br/><b>$46.68</b></span></div>
+      <div className="phone-list">{Array.from({length:5}).map((_,i)=><div key={i}><span>BTC</span><em className={i%2?'red':'green'}>⌁⌁⌁</em><small>$17,147</small></div>)}</div>
+    </>}
+  </div>
 }
 
 export default function HomePage({ i18n, user, onLogout }) {
-  const {language,setLanguage,t}=i18n
-  return <main className="site-page">
-    <header className="site-header"><Brand compact/><nav><a>{t.home}</a><a>{t.market}</a><a>{t.cryptoEtf}</a><a>{t.loan}</a><a>{t.financial}</a><a>{t.account}</a></nav><div className="header-right"><LanguageMenu language={language} setLanguage={setLanguage} t={t}/>{user?.is_staff && <Link className="admin-link" to="/admin">{t.admin}</Link>}<button className="plain-button" onClick={onLogout}>{t.logout}</button></div></header>
-    <section className="hero-section"><div className="hero-copy"><h1>{t.hero}</h1><button className="store-button"> &nbsp; App Store</button><div className="hero-points"><div><span>✧</span><div><strong>{t.application}</strong><p>{t.appText}</p></div></div><div><span>✧</span><div><strong>{t.assetAccess}</strong><p>{t.assetText}</p></div></div></div></div><div className="hero-phones"><PhoneMock/><PhoneMock large/></div></section>
-    <section className="stats-card"><div><strong>$3.8 B</strong><span>{t.statVolume}</span></div><div><strong>350+</strong><span>{t.statAssets}</span></div><div><strong>1.2 M</strong><span>{t.statUsers}</span></div></section>
-    <section className="feature-grid"><article className="feature-card dark-feature"><div className="feature-icon">●</div><strong>{t.features}</strong><p>Explore the latest account and interface improvements.</p></article><article className="feature-card outline-feature"><div className="feature-icon">♧</div><strong>{t.demo}</strong></article><article className="feature-card dark-feature small"><div className="feature-icon">▣</div><strong>{t.assets}</strong><button>{t.getStarted}</button></article><article className="feature-card dark-feature small align-right"><div className="feature-icon">▱</div><strong>{t.loans}</strong><button>{t.getStarted}</button></article></section>
-    <footer className="site-footer"><div><Brand compact/></div><div><strong>Products</strong><a>Markets</a><a>Account</a><a>Digital assets</a></div><div><strong>Company</strong><a>About Us</a><a>Help Center</a><a>Support</a></div><div><strong>Policies</strong><a>Terms & Conditions</a><a>Privacy policy</a><a>Online Support</a></div><div className="footer-bottom">© 2026 DXC. All rights reserved.</div></footer>
+  const { t }=i18n
+  return <main className="app-page home-page">
+    <AppHeader i18n={i18n} user={user} onLogout={onLogout}/>
+    <section className="home-hero">
+      <div className="home-copy">
+        <h1>{t.heroHeadline}</h1>
+        <button className="app-store-button"><span>●</span><span><small>{t.availableOn}</small><b>App Store</b></span></button>
+        <div className="home-point-list">
+          <div><span className="twinkle">✧</span><div><h3>{t.application}</h3><p>{t.applicationText}</p></div></div>
+          <div><span className="twinkle">✧</span><div><h3>{t.cryptoDeposit}</h3><p>{t.cryptoDepositText}</p></div></div>
+        </div>
+      </div>
+      <div className="home-visual"><PhoneMock/><PhoneMock detail/></div>
+    </section>
+
+    <section className="home-stats">
+      <div><strong>$3.8 B</strong><span>{t.averageVolume}</span></div>
+      <div><strong>350+</strong><span>{t.cryptocurrenciesListed}</span></div>
+      <div><strong>1.2 M</strong><span>{t.registeredUsers}</span></div>
+    </section>
+
+    <section className="home-feature-grid">
+      <Link to="/features" className="feature-banner dark"><span className="feature-arrow">➜</span><h3>{t.newFeatures}</h3><p>{t.newFeaturesText}</p></Link>
+      <Link to="/account" className="feature-banner demo"><span className="bell-icon">♧</span><h3>{t.demoAccount}</h3></Link>
+      <Link to="/market" className="feature-square dark"><span className="feature-line-icon">⌁</span><small>{t.lowFees}</small><h3>{t.tradeAll}</h3><p>{t.tradeAllText}</p><button>{t.getStarted}</button></Link>
+      <Link to="/loan" className="feature-square dark right"><span className="feature-line-icon">▱</span><small>{t.lowInterest}</small><h3>{t.cryptoLoans}</h3><p>{t.cryptoLoansText}</p><button>{t.getStarted}</button></Link>
+    </section>
+    <SiteFooter t={t}/>
   </main>
 }

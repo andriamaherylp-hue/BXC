@@ -1,28 +1,26 @@
-databases:
-  - name: dxc-db
-    databaseName: dxc
-    user: dxc
-
+# Optional Blueprint for a NEW environment only.
+# Do not use this file against an existing Render service unless you intend to create new resources.
 services:
   - type: web
-    name: dxc-web
+    name: www-edcsxc
     runtime: python
     buildCommand: bash ./build.sh
     startCommand: cd backend && gunicorn dxc_project.wsgi:application --bind 0.0.0.0:$PORT
     envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: dxc-db
-          property: connectionString
       - key: SECRET_KEY
         generateValue: true
       - key: DEBUG
         value: "0"
       - key: ALLOWED_HOSTS
-        value: ".onrender.com"
+        value: www-edcsxc.onrender.com
       - key: CSRF_TRUSTED_ORIGINS
-        value: "https://*.onrender.com"
+        value: https://www-edcsxc.onrender.com
       - key: SMS_BACKEND
-        value: "console"
-      - key: PYTHON_VERSION
-        value: "3.12.8"
+        value: console
+      - key: DATABASE_URL
+        fromDatabase:
+          name: dxc-db
+          property: connectionString
+
+databases:
+  - name: dxc-db
