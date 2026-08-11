@@ -1,0 +1,28 @@
+databases:
+  - name: dxc-db
+    databaseName: dxc
+    user: dxc
+
+services:
+  - type: web
+    name: dxc-web
+    runtime: python
+    buildCommand: bash ./build.sh
+    startCommand: cd backend && gunicorn dxc_project.wsgi:application --bind 0.0.0.0:$PORT
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: dxc-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "0"
+      - key: ALLOWED_HOSTS
+        value: ".onrender.com"
+      - key: CSRF_TRUSTED_ORIGINS
+        value: "https://*.onrender.com"
+      - key: SMS_BACKEND
+        value: "console"
+      - key: PYTHON_VERSION
+        value: "3.12.8"
