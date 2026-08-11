@@ -87,3 +87,12 @@ python manage.py ensure_superuser
 ```
 
 The helper creates or updates the named superuser and sets `is_staff`, `is_superuser`, and `is_active` to true. The password is never stored in the repository.
+
+## Email registration diagnostics
+
+For production email registration, see `EMAIL_VERIFICATION_RENDER.md`. A Render Shell command is included:
+
+```bash
+cd backend
+python manage.py diagnose_email --to your-test-address@gmail.com
+```

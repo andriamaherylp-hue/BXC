@@ -11,6 +11,10 @@ function formatCountdown(seconds) {
   return `00:${String(value).padStart(2, '0')}`
 }
 
+function looksLikeEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim())
+}
+
 export default function RegisterPage({ i18n, onLogin }) {
   const { language, setLanguage, t } = i18n
   const [mode, setMode] = useState('phone')
@@ -71,6 +75,10 @@ export default function RegisterPage({ i18n, onLogin }) {
     setError('')
     setMessage('')
     if (!form.destination.trim()) return setError(mode === 'email' ? 'Email required.' : 'Phone number required.')
+    if (mode === 'email' && !looksLikeEmail(form.destination)) return setError('Enter a valid email address.')
+    if (!form.username.trim()) return setError('Username is required before requesting a code.')
+    if (!form.password) return setError('Password is required before requesting a code.')
+    if (form.password !== form.confirmPassword) return setError('Passwords do not match.')
     if (codeSeconds > 0 || sendingCode) return
 
     setSendingCode(true)
@@ -90,6 +98,7 @@ export default function RegisterPage({ i18n, onLogin }) {
         setCodeSeconds(retry)
       }
       setError(err.message)
+      if (err.payload?.reason) console.warn('Verification delivery reason:', err.payload.reason)
     } finally {
       setSendingCode(false)
     }
@@ -191,7 +200,7 @@ export default function RegisterPage({ i18n, onLogin }) {
 
             {error && <div className="form-error">{error}</div>}
             {message && <div className="form-success">{message}</div>}
-            <button className="gold-primary" disabled={busy || !codeRequested || codeSeconds <= 0}>{busy ? '…' : t.signUp}</button>
+            <button className="gold-primary" disabled={busy || !codeRequested || codeSeconds <= 0 || form.code.trim().length !== 6}>{busy ? '…' : t.signUp}</button>
           </form>
 
           <p className="auth-link-row"><span>{t.alreadyAccount}</span> <Link to="/">{t.login}</Link></p>

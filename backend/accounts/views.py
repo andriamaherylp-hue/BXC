@@ -8,13 +8,14 @@ from django.contrib.auth.hashers import make_password, check_password
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
-from django.core.mail import send_mail
 from django.http import JsonResponse
 from django.middleware.csrf import get_token
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST, require_http_methods
+from django.views.decorators.csrf import csrf_exempt
 from .models import Profile, VerificationCode, DemoOrder
 from .sms import send_sms
+from .email_delivery import send_verification_email, DeliveryError
 
 logger=logging.getLogger(__name__)
 User=get_user_model()
@@ -113,11 +114,22 @@ def _verification_timing():
     return ttl,resend
 
 
+@csrf_exempt
 @require_POST
 def request_code(request):
-    data=body(request); mode=str(data.get('mode','')); destination=str(data.get('destination',''))
-    try: destination=normalize_destination(mode,destination)
-    except ValueError as exc:return JsonResponse({'error':str(exc)},status=400)
+    data=body(request)
+    mode=str(data.get('mode','')).strip().lower()
+    destination_raw=str(data.get('destination',''))
+    try:
+        destination=normalize_destination(mode,destination_raw)
+    except ValueError as exc:
+        return JsonResponse({'error':str(exc)},status=400)
+
+    # Do not send verification messages for identifiers that are already registered.
+    if mode=='email' and User.objects.filter(email__iexact=destination).exists():
+        return JsonResponse({'error':'An account already exists with this email address.'},status=409)
+    if mode=='phone' and Profile.objects.filter(phone=destination).exists():
+        return JsonResponse({'error':'An account already exists with this phone number.'},status=409)
 
     ttl,resend=_verification_timing()
     now=timezone.now()
@@ -126,10 +138,10 @@ def request_code(request):
         elapsed=(now-latest.created_at).total_seconds()
         if elapsed<resend:
             retry_after=max(1,int(resend-elapsed+0.999))
-            return JsonResponse({'error':'Please wait before requesting another code.','retry_after':retry_after},status=429)
-
-    if mode=='email' and not settings.DEBUG and not getattr(settings,'EMAIL_HOST',''):
-        return JsonResponse({'error':'Email delivery is not configured on this server.'},status=503)
+            return JsonResponse({
+                'error':'Please wait before requesting another code.',
+                'retry_after':retry_after,
+            },status=429)
 
     code=f'{secrets.randbelow(900000)+100000}'
     VerificationCode.objects.filter(channel=mode,destination=destination,used=False).update(used=True)
@@ -142,25 +154,30 @@ def request_code(request):
 
     try:
         if mode=='email':
-            send_mail(
-                'Your BXC verification code',
-                f'Your BXC verification code is {code}.\n\nThis code is valid for {ttl} seconds.\nIf you did not request this code, you can ignore this email.',
-                settings.DEFAULT_FROM_EMAIL,
-                [destination],
-                fail_silently=False,
-            )
+            send_verification_email(destination,code,ttl)
         else:
             send_sms(destination,f'Your BXC verification code is {code}. It is valid for {ttl} seconds.')
+    except DeliveryError as exc:
+        verification.delete()
+        logger.warning('Verification email not sent (%s) to %s',exc.code,destination)
+        return JsonResponse({'error':exc.public_message,'reason':exc.code},status=503)
     except Exception:
         verification.delete()
         logger.exception('Verification delivery failed for channel=%s destination=%s',mode,destination)
-        return JsonResponse({'error':'Unable to send the verification code right now. Please try again.'},status=502)
+        return JsonResponse({'error':'Unable to send the verification code right now. Please try again.','reason':'delivery_failed'},status=503)
 
-    response={'ok':True,'expires_in':ttl,'resend_in':resend}
-    if settings.DEBUG:response['dev_code']=code
+    response={
+        'ok':True,
+        'expires_in':ttl,
+        'resend_in':resend,
+        'destination':destination,
+    }
+    if settings.DEBUG:
+        response['dev_code']=code
     return JsonResponse(response)
 
 
+@csrf_exempt
 @require_POST
 def register(request):
     data=body(request); mode=str(data.get('mode','')); username=str(data.get('username','')).strip(); password=str(data.get('password','')); confirm=str(data.get('confirm_password','')); code=str(data.get('code','')).strip(); language=str(data.get('preferred_language','en'))[:12]
