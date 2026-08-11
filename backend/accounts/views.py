@@ -1,4 +1,4 @@
-import json, re, secrets
+import json, logging, re, secrets
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 from functools import wraps
@@ -7,6 +7,7 @@ from django.contrib.auth import authenticate, get_user_model, login, logout, upd
 from django.contrib.auth.hashers import make_password, check_password
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
 from django.core.mail import send_mail
 from django.http import JsonResponse
 from django.middleware.csrf import get_token
@@ -15,6 +16,7 @@ from django.views.decorators.http import require_GET, require_POST, require_http
 from .models import Profile, VerificationCode, DemoOrder
 from .sms import send_sms
 
+logger=logging.getLogger(__name__)
 User=get_user_model()
 PHONE_RE=re.compile(r'^\+[1-9]\d{6,14}$')
 ALLOWED_CATEGORIES={'crypto','forex','stocks','futures'}
@@ -93,7 +95,10 @@ def logout_view(request): logout(request); return JsonResponse({'ok':True})
 def normalize_destination(mode,destination):
     destination=destination.strip()
     if mode=='email':
-        if '@' not in destination or len(destination)>254: raise ValueError('Enter a valid email address.')
+        try:
+            validate_email(destination)
+        except ValidationError:
+            raise ValueError('Enter a valid email address.')
         return destination.lower()
     if mode=='phone':
         destination=re.sub(r'[\s()-]','',destination)
@@ -102,18 +107,56 @@ def normalize_destination(mode,destination):
     raise ValueError('Invalid registration mode.')
 
 
+def _verification_timing():
+    ttl=max(30,int(getattr(settings,'VERIFICATION_CODE_TTL_SECONDS',60)))
+    resend=max(30,int(getattr(settings,'VERIFICATION_RESEND_SECONDS',60)))
+    return ttl,resend
+
+
 @require_POST
 def request_code(request):
     data=body(request); mode=str(data.get('mode','')); destination=str(data.get('destination',''))
     try: destination=normalize_destination(mode,destination)
     except ValueError as exc:return JsonResponse({'error':str(exc)},status=400)
-    recent=VerificationCode.objects.filter(channel=mode,destination=destination,created_at__gte=timezone.now()-timedelta(seconds=60)).exists()
-    if recent:return JsonResponse({'error':'Please wait one minute before requesting another code.'},status=429)
+
+    ttl,resend=_verification_timing()
+    now=timezone.now()
+    latest=VerificationCode.objects.filter(channel=mode,destination=destination).order_by('-created_at').first()
+    if latest:
+        elapsed=(now-latest.created_at).total_seconds()
+        if elapsed<resend:
+            retry_after=max(1,int(resend-elapsed+0.999))
+            return JsonResponse({'error':'Please wait before requesting another code.','retry_after':retry_after},status=429)
+
+    if mode=='email' and not settings.DEBUG and not getattr(settings,'EMAIL_HOST',''):
+        return JsonResponse({'error':'Email delivery is not configured on this server.'},status=503)
+
     code=f'{secrets.randbelow(900000)+100000}'
-    VerificationCode.objects.create(channel=mode,destination=destination,code_hash=make_password(code),expires_at=timezone.now()+timedelta(minutes=10))
-    if mode=='email':send_mail('Your BXC verification code',f'Your verification code is {code}. It expires in 10 minutes.',settings.DEFAULT_FROM_EMAIL,[destination],fail_silently=False)
-    else:send_sms(destination,f'Your BXC verification code is {code}. It expires in 10 minutes.')
-    response={'ok':True}
+    VerificationCode.objects.filter(channel=mode,destination=destination,used=False).update(used=True)
+    verification=VerificationCode.objects.create(
+        channel=mode,
+        destination=destination,
+        code_hash=make_password(code),
+        expires_at=now+timedelta(seconds=ttl),
+    )
+
+    try:
+        if mode=='email':
+            send_mail(
+                'Your BXC verification code',
+                f'Your BXC verification code is {code}.\n\nThis code is valid for {ttl} seconds.\nIf you did not request this code, you can ignore this email.',
+                settings.DEFAULT_FROM_EMAIL,
+                [destination],
+                fail_silently=False,
+            )
+        else:
+            send_sms(destination,f'Your BXC verification code is {code}. It is valid for {ttl} seconds.')
+    except Exception:
+        verification.delete()
+        logger.exception('Verification delivery failed for channel=%s destination=%s',mode,destination)
+        return JsonResponse({'error':'Unable to send the verification code right now. Please try again.'},status=502)
+
+    response={'ok':True,'expires_in':ttl,'resend_in':resend}
     if settings.DEBUG:response['dev_code']=code
     return JsonResponse(response)
 

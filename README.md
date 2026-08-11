@@ -47,3 +47,43 @@ The update adds migration `accounts.0002_profile_demo_fields_demoorder`. The exi
 Staff/superusers can open `/admin` for the custom dashboard and `/django-admin/` for Django's technical administration.
 
 Rotate any passwords that have ever been pasted into chat, logs, screenshots, or public issues before continuing production deployment.
+
+## Email verification in production (60 seconds)
+
+The registration code is now valid for 60 seconds. The account is created only after the server validates the code before it expires. The Send button also has a 60-second resend cooldown.
+
+For Gmail SMTP on a paid Render web service, configure these environment variables:
+
+```text
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_HOST_USER=your-sender@gmail.com
+EMAIL_HOST_PASSWORD=<Google App Password>
+EMAIL_USE_TLS=1
+EMAIL_USE_SSL=0
+EMAIL_TIMEOUT=15
+DEFAULT_FROM_EMAIL=your-sender@gmail.com
+VERIFICATION_CODE_TTL_SECONDS=60
+VERIFICATION_RESEND_SECONDS=60
+```
+
+Do not commit real passwords or App Passwords to GitHub.
+
+## Superuser helper
+
+Configure these only in Render Environment:
+
+```text
+BXC_ADMIN_USERNAME=grandiravecmoi
+BXC_ADMIN_EMAIL=your-admin-email@example.com
+BXC_ADMIN_PASSWORD=<strong private password>
+```
+
+Then, from the Render Shell:
+
+```bash
+cd backend
+python manage.py ensure_superuser
+```
+
+The helper creates or updates the named superuser and sets `is_staff`, `is_superuser`, and `is_active` to true. The password is never stored in the repository.
