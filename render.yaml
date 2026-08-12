@@ -1,26 +1,33 @@
-# Optional Blueprint for a NEW environment only.
-# Do not use this file against an existing Render service unless you intend to create new resources.
+# Optional Blueprint for a NEW BXC environment.
+# If www-edcsxc already exists, configure it manually with the same values below.
 services:
   - type: web
     name: www-edcsxc
     runtime: python
     buildCommand: bash ./build.sh
-    startCommand: cd backend && gunicorn dxc_project.wsgi:application --bind 0.0.0.0:$PORT
+    preDeployCommand: bash ./predeploy.sh
+    startCommand: cd backend && gunicorn dxc_project.wsgi:application --bind 0.0.0.0:$PORT --workers ${WEB_CONCURRENCY:-2} --timeout 120
+    healthCheckPath: /health/
+    autoDeployTrigger: commit
     envVars:
       - key: SECRET_KEY
         generateValue: true
       - key: DEBUG
         value: "0"
-      - key: ALLOWED_HOSTS
-        value: www-edcsxc.onrender.com
-      - key: CSRF_TRUSTED_ORIGINS
-        value: https://www-edcsxc.onrender.com
+      - key: WEB_CONCURRENCY
+        value: "2"
+      - key: VERIFICATION_CODE_TTL_SECONDS
+        value: "60"
+      - key: VERIFICATION_RESEND_SECONDS
+        value: "60"
       - key: SMS_BACKEND
         value: console
       - key: DATABASE_URL
         fromDatabase:
-          name: dxc-db
+          name: bxc-db
           property: connectionString
 
 databases:
-  - name: dxc-db
+  - name: bxc-db
+    databaseName: bxc
+    user: bxc

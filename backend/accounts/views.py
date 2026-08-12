@@ -9,10 +9,10 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from django.http import JsonResponse
+from django.db import IntegrityError, transaction
 from django.middleware.csrf import get_token
 from django.utils import timezone
-from django.views.decorators.http import require_GET, require_POST, require_http_methods
-from django.views.decorators.csrf import csrf_exempt
+import django.views.decorators.http
 from .models import Profile, VerificationCode, DemoOrder
 from .sms import send_sms
 from .email_delivery import send_verification_email, DeliveryError
@@ -48,6 +48,7 @@ def user_json(user):
         'preferred_language':profile.preferred_language,'is_staff':user.is_staff,
         'is_suspended':profile.is_suspended,'account_code':profile.account_code,
         'is_verified':profile.is_verified,'verification_requested':profile.verification_requested,
+        'email_verified':bool(profile.email_verified_at),'phone_verified':bool(profile.phone_verified_at),
         'date_joined':user.date_joined.isoformat(),
     }
 
@@ -69,17 +70,17 @@ def staff_required(view):
     return wrapped
 
 
-@require_GET
+@django.views.decorators.http.require_GET
 def csrf(request): return JsonResponse({'csrfToken':get_token(request)})
 
 
-@require_GET
+@django.views.decorators.http.require_GET
 def me(request):
     if not request.user.is_authenticated:return JsonResponse({'error':'Authentication required.'},status=401)
     return JsonResponse({'user':user_json(request.user)})
 
 
-@require_POST
+@django.views.decorators.http.require_POST
 def login_view(request):
     data=body(request); username=str(data.get('username','')).strip(); password=str(data.get('password',''))
     user=authenticate(request,username=username,password=password)
@@ -89,7 +90,7 @@ def login_view(request):
     login(request,user); return JsonResponse({'user':user_json(user)})
 
 
-@require_POST
+@django.views.decorators.http.require_POST
 def logout_view(request): logout(request); return JsonResponse({'ok':True})
 
 
@@ -114,8 +115,7 @@ def _verification_timing():
     return ttl,resend
 
 
-@csrf_exempt
-@require_POST
+@django.views.decorators.http.require_POST
 def request_code(request):
     data=body(request)
     mode=str(data.get('mode','')).strip().lower()
@@ -177,32 +177,87 @@ def request_code(request):
     return JsonResponse(response)
 
 
-@csrf_exempt
-@require_POST
+@django.views.decorators.http.require_POST
 def register(request):
-    data=body(request); mode=str(data.get('mode','')); username=str(data.get('username','')).strip(); password=str(data.get('password','')); confirm=str(data.get('confirm_password','')); code=str(data.get('code','')).strip(); language=str(data.get('preferred_language','en'))[:12]
-    try: destination=normalize_destination(mode,str(data.get('destination','')))
-    except ValueError as exc:return JsonResponse({'error':str(exc)},status=400)
-    if not username:return JsonResponse({'error':'Username is required.'},status=400)
-    if password!=confirm:return JsonResponse({'error':'Passwords do not match.'},status=400)
-    if User.objects.filter(username__iexact=username).exists():return JsonResponse({'error':'Username already exists.'},status=409)
-    if mode=='email' and User.objects.filter(email__iexact=destination).exists():return JsonResponse({'error':'Email already exists.'},status=409)
-    if mode=='phone' and Profile.objects.filter(phone=destination).exists():return JsonResponse({'error':'Phone number already exists.'},status=409)
-    try: validate_password(password)
-    except ValidationError as exc:return JsonResponse({'error':' '.join(exc.messages)},status=400)
-    verification=VerificationCode.objects.filter(channel=mode,destination=destination,used=False).order_by('-created_at').first()
-    if not verification or verification.expires_at<timezone.now():return JsonResponse({'error':'Verification code is missing or expired.'},status=400)
-    if verification.attempts>=5:return JsonResponse({'error':'Too many verification attempts. Request a new code.'},status=429)
-    if not check_password(code,verification.code_hash):
-        verification.attempts+=1; verification.save(update_fields=['attempts']); return JsonResponse({'error':'Invalid verification code.'},status=400)
-    email=destination if mode=='email' else ''
-    user=User.objects.create_user(username=username,email=email,password=password)
-    profile=ensure_profile(user); profile.phone=destination if mode=='phone' else None; profile.preferred_language=language; profile.save(update_fields=['phone','preferred_language'])
-    verification.used=True; verification.save(update_fields=['used'])
-    login(request,user); return JsonResponse({'user':user_json(user)},status=201)
+    data = body(request)
+    mode = str(data.get('mode', '')).strip().lower()
+    username = str(data.get('username', '')).strip()
+    password = str(data.get('password', ''))
+    confirm = str(data.get('confirm_password', ''))
+    code = str(data.get('code', '')).strip()
+    language = str(data.get('preferred_language', 'en'))[:12]
+
+    try:
+        destination = normalize_destination(mode, str(data.get('destination', '')))
+    except ValueError as exc:
+        return JsonResponse({'error': str(exc)}, status=400)
+
+    if not username:
+        return JsonResponse({'error': 'Username is required.'}, status=400)
+    if not re.fullmatch(r'[A-Za-z0-9_.@+-]{3,150}', username):
+        return JsonResponse({'error': 'Username contains unsupported characters.'}, status=400)
+    if password != confirm:
+        return JsonResponse({'error': 'Passwords do not match.'}, status=400)
+    if not re.fullmatch(r'\d{6}', code):
+        return JsonResponse({'error': 'Enter the 6-digit verification code.'}, status=400)
+    if User.objects.filter(username__iexact=username).exists():
+        return JsonResponse({'error': 'Username already exists.'}, status=409)
+    if mode == 'email' and User.objects.filter(email__iexact=destination).exists():
+        return JsonResponse({'error': 'Email already exists.'}, status=409)
+    if mode == 'phone' and Profile.objects.filter(phone=destination).exists():
+        return JsonResponse({'error': 'Phone number already exists.'}, status=409)
+
+    try:
+        validate_password(password)
+    except ValidationError as exc:
+        return JsonResponse({'error': ' '.join(exc.messages)}, status=400)
+
+    now = timezone.now()
+    try:
+        with transaction.atomic():
+            verification = (
+                VerificationCode.objects.select_for_update()
+                .filter(channel=mode, destination=destination, used=False)
+                .order_by('-created_at')
+                .first()
+            )
+            if not verification:
+                return JsonResponse({'error': 'Verification code is missing or expired.'}, status=400)
+            if verification.expires_at < now:
+                verification.used = True
+                verification.save(update_fields=['used'])
+                return JsonResponse({'error': 'Verification code is missing or expired.'}, status=400)
+            if verification.attempts >= 5:
+                verification.used = True
+                verification.save(update_fields=['used'])
+                return JsonResponse({'error': 'Too many verification attempts. Request a new code.'}, status=429)
+            if not check_password(code, verification.code_hash):
+                verification.attempts += 1
+                verification.save(update_fields=['attempts'])
+                return JsonResponse({'error': 'Invalid verification code.'}, status=400)
+
+            email = destination if mode == 'email' else ''
+            user = User.objects.create_user(username=username, email=email, password=password)
+            profile = ensure_profile(user)
+            profile.phone = destination if mode == 'phone' else None
+            profile.preferred_language = language
+            if mode == 'email':
+                profile.email_verified_at = now
+            else:
+                profile.phone_verified_at = now
+            profile.save(
+                update_fields=['phone', 'preferred_language', 'email_verified_at', 'phone_verified_at']
+            )
+            verification.used = True
+            verification.save(update_fields=['used'])
+    except IntegrityError:
+        return JsonResponse({'error': 'This account information is already in use.'}, status=409)
+
+    login(request, user)
+    return JsonResponse({'user': user_json(user)}, status=201)
 
 
-@require_GET
+@django.views.decorators.http.require_GET
 @auth_required
 def account_summary(request):
     profile=ensure_profile(request.user)
@@ -215,7 +270,7 @@ def account_summary(request):
     })
 
 
-@require_POST
+@django.views.decorators.http.require_POST
 @auth_required
 def verification_request(request):
     profile=ensure_profile(request.user)
@@ -225,7 +280,7 @@ def verification_request(request):
     return JsonResponse({'ok':True,'is_verified':profile.is_verified,'verification_requested':profile.verification_requested})
 
 
-@require_POST
+@django.views.decorators.http.require_POST
 @auth_required
 def change_password(request):
     data=body(request); current=str(data.get('current_password','')); new=str(data.get('new_password',''))
@@ -236,7 +291,7 @@ def change_password(request):
     return JsonResponse({'ok':True})
 
 
-@require_http_methods(['GET','POST'])
+@django.views.decorators.http.require_http_methods(['GET','POST'])
 @auth_required
 def demo_orders(request):
     if request.method=='GET':
@@ -252,21 +307,21 @@ def demo_orders(request):
     return JsonResponse({'order':{'id':order.id,'status':'simulated'}},status=201)
 
 
-@require_GET
+@django.views.decorators.http.require_GET
 @staff_required
 def admin_users(request):
     users=User.objects.select_related('profile').order_by('-date_joined')[:1000]
     return JsonResponse({'users':[user_json(u) for u in users]})
 
 
-@require_GET
+@django.views.decorators.http.require_GET
 @staff_required
 def admin_overview(request):
     total=User.objects.count(); suspended=Profile.objects.filter(is_suspended=True).count(); verified=Profile.objects.filter(is_verified=True).count()
     return JsonResponse({'total_users':total,'active_users':max(0,total-suspended),'suspended_users':suspended,'verified_users':verified,'demo_orders':DemoOrder.objects.count()})
 
 
-@require_POST
+@django.views.decorators.http.require_POST
 @staff_required
 def admin_suspend(request,user_id):
     try:target=User.objects.get(pk=user_id)
@@ -276,7 +331,7 @@ def admin_suspend(request,user_id):
     return JsonResponse({'user':user_json(target)})
 
 
-@require_POST
+@django.views.decorators.http.require_POST
 @staff_required
 def admin_verify(request,user_id):
     try:target=User.objects.get(pk=user_id)

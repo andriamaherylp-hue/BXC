@@ -10,6 +10,8 @@ class Profile(models.Model):
     account_code=models.CharField(max_length=12,blank=True,default='')
     is_verified=models.BooleanField(default=False)
     verification_requested=models.BooleanField(default=False)
+    email_verified_at=models.DateTimeField(null=True,blank=True)
+    phone_verified_at=models.DateTimeField(null=True,blank=True)
     created_at=models.DateTimeField(auto_now_add=True)
     def __str__(self): return f'Profile({self.user.username})'
 
