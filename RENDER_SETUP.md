@@ -10,46 +10,50 @@ In the Render workspace:
 2. Name: `bxc-db`.
 3. Database: `bxc`.
 4. User: `bxc` (or let Render generate it).
-5. Region: use the **same region as `www-edcsxc`** (for example Oregon).
-6. Choose the database plan you want and create it.
-7. Wait for **Available**.
-8. Open **Connect** and copy the **Internal Database URL**.
+5. Region: use the **same region as `www-edcsxc`**.
+6. Create the database and wait for **Available**.
+7. Open **Connect** and copy the **Internal Database URL**.
 
 Do not paste this URL into source code or GitHub.
 
 ## 2. Connect `www-edcsxc` to `bxc-db`
 
-Open **www-edcsxc → Environment** and add:
+Open **www-edcsxc → Environment** and configure:
 
 - `DATABASE_URL` = Internal Database URL of `bxc-db`
 - `SECRET_KEY` = Generate
 - `DEBUG` = `0`
 - `WEB_CONCURRENCY` = `2`
-- `VERIFICATION_CODE_TTL_SECONDS` = `60`
-- `VERIFICATION_RESEND_SECONDS` = `60`
-- `SMS_BACKEND` = `console`
+- `DB_CONN_MAX_AGE` = `600`
+- `SESSION_COOKIE_AGE` = `28800`
+- `LOG_LEVEL` = `INFO`
 
-`RENDER_EXTERNAL_HOSTNAME` is supplied automatically by Render. The Django settings automatically add it to `ALLOWED_HOSTS` and `CSRF_TRUSTED_ORIGINS`.
+If you set the host variables manually:
 
-## 3. Gmail verification settings
+- `ALLOWED_HOSTS` = `www-edcsxc.onrender.com`
+- `CSRF_TRUSTED_ORIGINS` = `https://www-edcsxc.onrender.com`
 
-For real email codes, add:
+`RENDER_EXTERNAL_HOSTNAME` is also supplied automatically by Render and is added by the Django settings.
 
-- `EMAIL_BACKEND` = `django.core.mail.backends.smtp.EmailBackend`
-- `EMAIL_HOST` = `smtp.gmail.com`
-- `EMAIL_PORT` = `587`
-- `EMAIL_HOST_USER` = the Gmail sender address
-- `EMAIL_HOST_PASSWORD` = a Google **App Password**
-- `EMAIL_USE_TLS` = `1`
-- `EMAIL_USE_SSL` = `0`
-- `EMAIL_TIMEOUT` = `20`
-- `DEFAULT_FROM_EMAIL` = the same Gmail sender address
+Gmail SMTP, verification-code and SMS variables are **not required** for account registration or login in this version.
 
-Never store the Gmail password/App Password in GitHub.
+## 3. Authentication behavior
+
+Personal users and staff accounts use the same public login form:
+
+- Username
+- Password
+
+Public registration uses:
+
+- Username
+- Password
+
+Clicking **Sign-up** creates the account immediately in PostgreSQL and starts the login session. No email/SMS code is sent.
 
 ## 4. Web Service commands
 
-Keep the repo root as the Root Directory.
+Keep the repository root as the Root Directory.
 
 **Language:** Python 3
 
@@ -59,7 +63,7 @@ Keep the repo root as the Root Directory.
 bash ./build.sh
 ```
 
-**Pre-Deploy Command (recommended on a paid Render Web Service):**
+**Pre-Deploy Command:**
 
 ```bash
 bash ./predeploy.sh
@@ -77,15 +81,15 @@ cd backend && gunicorn dxc_project.wsgi:application --bind 0.0.0.0:$PORT --worke
 /health/
 ```
 
-The internal Django module is still named `dxc_project`; this does not change the public BXC service name.
+The internal Django module remains named `dxc_project`; this does not change the public BXC service name.
 
 ## 5. Create the BXC superuser in PostgreSQL
 
-Recommended method: configure these **secret Render environment variables**:
+Configure these secret Render environment variables:
 
 - `BXC_ADMIN_USERNAME` = `grandiravecmoi`
 - `BXC_ADMIN_EMAIL` = your private admin email
-- `BXC_ADMIN_PASSWORD` = a **new strong password that has never been posted publicly**
+- `BXC_ADMIN_PASSWORD` = a new strong private password
 - `BXC_ADMIN_RESET_PASSWORD` = `0`
 
 Then run in Render Shell:
@@ -96,25 +100,31 @@ python manage.py diagnose_database
 python manage.py ensure_superuser
 ```
 
-The first command confirms that the service is using `bxc-db`. The second creates the superuser if it does not exist. On later deploys, the password is preserved unless `BXC_ADMIN_RESET_PASSWORD=1`.
-
 You can alternatively run:
 
 ```bash
 python manage.py createsuperuser
 ```
 
-## 6. Test email delivery
+## 6. Validate the deployment
 
-After deployment:
+In Render Shell:
 
 ```bash
 cd ~/project/src/backend
-python manage.py diagnose_email
-python manage.py diagnose_email --to your-test-address@gmail.com
+python manage.py check
+python manage.py migrate --noinput
+python manage.py diagnose_database
+python manage.py ensure_superuser
 ```
 
-The diagnostic does not print the configured email password.
+Then test:
+
+1. Create a normal account with username + password.
+2. Confirm the account appears in PostgreSQL/admin.
+3. Log out.
+4. Log in again with the same username + password.
+5. Log in with the superuser and open `/admin`.
 
 ## 7. URLs
 
@@ -123,8 +133,8 @@ The diagnostic does not print the configured email password.
 - Django admin: `https://www-edcsxc.onrender.com/django-admin/`
 - Health check: `https://www-edcsxc.onrender.com/health/`
 
-## 8. Important production behavior
+## 8. Production behavior
 
-When `DEBUG=0`, this project intentionally **requires `DATABASE_URL`**. It will not silently fall back to temporary SQLite on Render. This prevents account loss during redeploys.
+When `DEBUG=0`, `DATABASE_URL` is required. The service does not silently fall back to temporary SQLite on Render.
 
-Financial-looking pages in this codebase remain **sandbox/demo functionality**. They do not move real customer funds.
+Financial-looking pages remain sandbox/demo functionality and do not move real customer funds.

@@ -3,4 +3,3 @@ gunicorn>=23,<27
 whitenoise>=6.8,<7
 dj-database-url>=2.3,<4
 psycopg2-binary>=2.9,<3
-twilio>=9,<10

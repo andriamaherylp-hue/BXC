@@ -1,14 +1,11 @@
 import json
 import logging
-import re
 import secrets
-from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 from functools import wraps
 
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model, login, logout, update_session_auth_hash
-from django.contrib.auth.hashers import check_password, make_password
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
@@ -18,13 +15,10 @@ from django.middleware.csrf import get_token
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST, require_http_methods
 
-from .email_delivery import DeliveryError, send_verification_email
-from .models import AdminAuditLog, DemoOrder, FundingRequest, Profile, SandboxTransaction, VerificationCode
-from .sms import send_sms
+from .models import AdminAuditLog, DemoOrder, FundingRequest, Profile, SandboxTransaction
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
-PHONE_RE = re.compile(r'^\+[1-9]\d{6,14}$')
 ALLOWED_CATEGORIES = {'crypto', 'forex', 'stocks', 'futures'}
 ALLOWED_MODES = {'options', 'futures', 'spot'}
 BALANCE_FIELDS = {
@@ -158,14 +152,24 @@ def me(request):
 @require_POST
 def login_view(request):
     data = body(request)
-    username = str(data.get('username', '')).strip()
+    username = str(data.get('username') or data.get('identifier') or '').strip()
     password = str(data.get('password', ''))
-    user = authenticate(request, username=username, password=password)
+
+    if not username or not password:
+        return JsonResponse({'error': 'Username and password are required.'}, status=400)
+
+    candidate = User.objects.filter(username__iexact=username).first()
+    if not candidate:
+        return JsonResponse({'error': 'Invalid username or password.'}, status=400)
+
+    user = authenticate(request, username=candidate.username, password=password)
     if not user:
         return JsonResponse({'error': 'Invalid username or password.'}, status=400)
+
     profile = ensure_profile(user)
     if profile.is_suspended:
         return JsonResponse({'error': 'This account is suspended. Contact support.'}, status=403)
+
     login(request, user)
     return JsonResponse({'user': user_json(user)})
 
@@ -176,152 +180,36 @@ def logout_view(request):
     return JsonResponse({'ok': True})
 
 
-def normalize_destination(mode, destination):
-    destination = destination.strip()
-    if mode == 'email':
-        try:
-            validate_email(destination)
-        except ValidationError:
-            raise ValueError('Enter a valid email address.')
-        return destination.lower()
-    if mode == 'phone':
-        destination = re.sub(r'[\s()-]', '', destination)
-        if not PHONE_RE.match(destination):
-            raise ValueError('Enter a valid international phone number.')
-        return destination
-    raise ValueError('Invalid registration mode.')
-
-
-def _verification_timing():
-    ttl = max(30, int(getattr(settings, 'VERIFICATION_CODE_TTL_SECONDS', 60)))
-    resend = max(30, int(getattr(settings, 'VERIFICATION_RESEND_SECONDS', 60)))
-    return ttl, resend
-
-
-@require_POST
-def request_code(request):
-    data = body(request)
-    mode = str(data.get('mode', '')).strip().lower()
-    destination_raw = str(data.get('destination', ''))
-    try:
-        destination = normalize_destination(mode, destination_raw)
-    except ValueError as exc:
-        return JsonResponse({'error': str(exc)}, status=400)
-
-    if mode == 'email' and User.objects.filter(email__iexact=destination).exists():
-        return JsonResponse({'error': 'An account already exists with this email address.'}, status=409)
-    if mode == 'phone' and Profile.objects.filter(phone=destination).exists():
-        return JsonResponse({'error': 'An account already exists with this phone number.'}, status=409)
-
-    ttl, resend = _verification_timing()
-    now = timezone.now()
-    latest = VerificationCode.objects.filter(channel=mode, destination=destination).order_by('-created_at').first()
-    if latest:
-        elapsed = (now - latest.created_at).total_seconds()
-        if elapsed < resend:
-            retry_after = max(1, int(resend - elapsed + 0.999))
-            return JsonResponse({'error': 'Please wait before requesting another code.', 'retry_after': retry_after}, status=429)
-
-    code = f'{secrets.randbelow(900000) + 100000}'
-    VerificationCode.objects.filter(channel=mode, destination=destination, used=False).update(used=True)
-    verification = VerificationCode.objects.create(
-        channel=mode,
-        destination=destination,
-        code_hash=make_password(code),
-        expires_at=now + timedelta(seconds=ttl),
-    )
-    try:
-        if mode == 'email':
-            send_verification_email(destination, code, ttl)
-        else:
-            send_sms(destination, f'Your BXC verification code is {code}. It is valid for {ttl} seconds.')
-    except DeliveryError as exc:
-        verification.delete()
-        logger.warning('Verification email not sent (%s) to %s', exc.code, destination)
-        return JsonResponse({'error': exc.public_message, 'reason': exc.code}, status=503)
-    except Exception:
-        verification.delete()
-        logger.exception('Verification delivery failed for channel=%s destination=%s', mode, destination)
-        return JsonResponse({'error': 'Unable to send the verification code right now. Please try again.', 'reason': 'delivery_failed'}, status=503)
-
-    response = {'ok': True, 'expires_in': ttl, 'resend_in': resend, 'destination': destination}
-    if settings.DEBUG:
-        response['dev_code'] = code
-    return JsonResponse(response)
-
-
 @require_POST
 def register(request):
     data = body(request)
-    mode = str(data.get('mode', '')).strip().lower()
     username = str(data.get('username', '')).strip()
     password = str(data.get('password', ''))
-    confirm = str(data.get('confirm_password', ''))
-    code = str(data.get('code', '')).strip()
     language = str(data.get('preferred_language', 'en'))[:12]
-
-    try:
-        destination = normalize_destination(mode, str(data.get('destination', '')))
-    except ValueError as exc:
-        return JsonResponse({'error': str(exc)}, status=400)
 
     if not username:
         return JsonResponse({'error': 'Username is required.'}, status=400)
-    if not re.fullmatch(r'[A-Za-z0-9_.@+-]{3,150}', username):
-        return JsonResponse({'error': 'Username contains unsupported characters.'}, status=400)
-    if password != confirm:
-        return JsonResponse({'error': 'Passwords do not match.'}, status=400)
-    if not re.fullmatch(r'\d{6}', code):
-        return JsonResponse({'error': 'Enter the 6-digit verification code.'}, status=400)
+    if len(username) > 150:
+        return JsonResponse({'error': 'Username must be 150 characters or fewer.'}, status=400)
+    if not password:
+        return JsonResponse({'error': 'Password is required.'}, status=400)
     if User.objects.filter(username__iexact=username).exists():
         return JsonResponse({'error': 'Username already exists.'}, status=409)
-    if mode == 'email' and User.objects.filter(email__iexact=destination).exists():
-        return JsonResponse({'error': 'Email already exists.'}, status=409)
-    if mode == 'phone' and Profile.objects.filter(phone=destination).exists():
-        return JsonResponse({'error': 'Phone number already exists.'}, status=409)
 
     try:
         validate_password(password)
     except ValidationError as exc:
         return JsonResponse({'error': ' '.join(exc.messages)}, status=400)
 
-    now = timezone.now()
     try:
         with transaction.atomic():
-            verification = (
-                VerificationCode.objects.select_for_update()
-                .filter(channel=mode, destination=destination, used=False)
-                .order_by('-created_at')
-                .first()
-            )
-            if not verification or verification.expires_at < now:
-                if verification:
-                    verification.used = True
-                    verification.save(update_fields=['used'])
-                return JsonResponse({'error': 'Verification code is missing or expired.'}, status=400)
-            if verification.attempts >= 5:
-                verification.used = True
-                verification.save(update_fields=['used'])
-                return JsonResponse({'error': 'Too many verification attempts. Request a new code.'}, status=429)
-            if not check_password(code, verification.code_hash):
-                verification.attempts += 1
-                verification.save(update_fields=['attempts'])
-                return JsonResponse({'error': 'Invalid verification code.'}, status=400)
-
-            email = destination if mode == 'email' else ''
-            user = User.objects.create_user(username=username, email=email, password=password)
+            user = User.objects.create_user(username=username, password=password)
             profile = ensure_profile(user)
-            profile.phone = destination if mode == 'phone' else None
+            profile.phone = None
             profile.preferred_language = language
-            if mode == 'email':
-                profile.email_verified_at = now
-            else:
-                profile.phone_verified_at = now
-            profile.save(update_fields=['phone', 'preferred_language', 'email_verified_at', 'phone_verified_at'])
-            verification.used = True
-            verification.save(update_fields=['used'])
+            profile.save(update_fields=['phone', 'preferred_language'])
     except IntegrityError:
-        return JsonResponse({'error': 'This account information is already in use.'}, status=409)
+        return JsonResponse({'error': 'Username already exists.'}, status=409)
 
     login(request, user)
     return JsonResponse({'user': user_json(user)}, status=201)

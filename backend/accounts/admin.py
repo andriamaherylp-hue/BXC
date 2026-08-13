@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import AdminAuditLog, DemoOrder, FundingRequest, Profile, SandboxTransaction, VerificationCode
+from .models import AdminAuditLog, DemoOrder, FundingRequest, Profile, SandboxTransaction
 
 
 @admin.register(Profile)
@@ -11,14 +11,6 @@ class ProfileAdmin(admin.ModelAdmin):
     search_fields = ('user__username', 'user__email', 'phone', 'account_code', 'display_name')
     list_filter = ('vip_level', 'is_verified', 'verification_requested', 'is_suspended', 'withdrawals_blocked')
     readonly_fields = ('created_at', 'email_verified_at', 'phone_verified_at')
-
-
-@admin.register(VerificationCode)
-class VerificationCodeAdmin(admin.ModelAdmin):
-    list_display = ('channel', 'destination', 'used', 'attempts', 'expires_at', 'created_at')
-    list_filter = ('channel', 'used')
-    search_fields = ('destination',)
-    readonly_fields = ('code_hash', 'created_at')
 
 
 @admin.register(DemoOrder)
