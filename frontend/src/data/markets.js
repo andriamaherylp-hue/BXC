@@ -1,3 +1,10 @@
+import btcIcon from '../assets/coins/bitcoin.png'
+import dogeIcon from '../assets/coins/dogecoin.png'
+import ethIcon from '../assets/coins/ethereum.png'
+import ltcIcon from '../assets/coins/litecoin.png'
+import xrpIcon from '../assets/coins/xrp.png'
+import solIcon from '../assets/coins/solana.png'
+
 export const MARKET_TABS = [
   ['crypto', 'Crypto'],
   ['forex', 'Forex'],
@@ -9,17 +16,17 @@ const line = (...values) => values
 
 export const MARKET_DATA = {
   crypto: [
-    { code:'BTC/USDT', symbol:'BTC', name:'Bitcoin', price:63367.4, change:-0.72, icon:'₿', accent:'orange', spark:line(42,44,43,47,46,49,50,48,47,42,41) },
-    { code:'ETH/USDT', symbol:'ETH', name:'Ethereum', price:1863.46, change:-0.42, icon:'◆', accent:'blue', spark:line(48,45,52,46,53,49,55,47,50,46,48) },
-    { code:'SOL/USDT', symbol:'SOL', name:'Solana', price:75.24, change:-0.71, icon:'≋', accent:'mint', spark:line(41,43,46,49,52,53,55,52,50,51,48) },
-    { code:'DOGE/USDT', symbol:'DOGE', name:'Dogecoin', price:0.07078, change:1.68, icon:'Ð', accent:'gold', spark:line(40,43,46,48,52,55,53,57,55,52,51) },
-    { code:'XRP/USDT', symbol:'XRP', name:'XRP', price:1.0106, change:-0.74, icon:'×', accent:'black', spark:line(42,46,48,50,52,50,54,51,48,47,45) },
+    { code:'BTC/USDT', symbol:'BTC', name:'Bitcoin', price:63367.4, change:-0.72, icon:'₿', image:btcIcon, accent:'orange', spark:line(42,44,43,47,46,49,50,48,47,42,41) },
+    { code:'ETH/USDT', symbol:'ETH', name:'Ethereum', price:1863.46, change:-0.42, icon:'◆', image:ethIcon, accent:'blue', spark:line(48,45,52,46,53,49,55,47,50,46,48) },
+    { code:'SOL/USDT', symbol:'SOL', name:'Solana', price:75.24, change:-0.71, icon:'≋', image:solIcon, accent:'mint', spark:line(41,43,46,49,52,53,55,52,50,51,48) },
+    { code:'DOGE/USDT', symbol:'DOGE', name:'Dogecoin', price:0.07078, change:1.68, icon:'Ð', image:dogeIcon, accent:'gold', spark:line(40,43,46,48,52,55,53,57,55,52,51) },
+    { code:'XRP/USDT', symbol:'XRP', name:'XRP', price:1.0106, change:-0.74, icon:'×', image:xrpIcon, accent:'black', spark:line(42,46,48,50,52,50,54,51,48,47,45) },
     { code:'PEPE/USDT', symbol:'PEPE', name:'Pepe', price:0.00000279, change:-2.11, icon:'P', accent:'green', spark:line(55,38,55,38,55,38,55,38,55,38,44) },
     { code:'BNB/USDT', symbol:'BNB', name:'BNB', price:609.17, change:1.60, icon:'◇', accent:'yellow', spark:line(42,44,48,46,49,51,50,54,53,49,47) },
     { code:'ATOM/USDT', symbol:'ATOM', name:'Cosmos', price:1.432, change:1.85, icon:'✳', accent:'charcoal', spark:line(40,45,44,50,49,54,52,55,51,49,48) },
     { code:'XLM/USDT', symbol:'XLM', name:'Stellar', price:0.1609, change:-0.74, icon:'✦', accent:'black', spark:line(42,46,48,47,50,49,52,48,51,47,46) },
     { code:'DOT/USDT', symbol:'DOT', name:'Polkadot', price:0.783, change:-2.37, icon:'P', accent:'pink', spark:line(55,52,48,45,44,39,42,48,47,49,45) },
-    { code:'LTC/USDT', symbol:'LTC', name:'Litecoin', price:45.25, change:0.38, icon:'Ł', accent:'silver', spark:line(39,41,44,45,48,50,54,52,55,51,50) },
+    { code:'LTC/USDT', symbol:'LTC', name:'Litecoin', price:45.25, change:0.38, icon:'Ł', image:ltcIcon, accent:'silver', spark:line(39,41,44,45,48,50,54,52,55,51,50) },
     { code:'ADA/USDT', symbol:'ADA', name:'Cardano', price:0.1855, change:-3.99, icon:'◉', accent:'navy', spark:line(48,52,46,50,47,53,49,52,48,51,47) },
     { code:'LINK/USDT', symbol:'LINK', name:'Chainlink', price:8.56, change:4.14, icon:'⬡', accent:'blue', spark:line(39,45,48,52,55,57,55,59,56,48,46) },
     { code:'UNI/USDT', symbol:'UNI', name:'Uniswap', price:3.718, change:-5.27, icon:'U', accent:'pink', spark:line(53,49,47,45,40,38,42,45,47,46,48) },

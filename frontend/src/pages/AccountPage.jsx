@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import AppHeader from '../components/AppHeader'
 import SiteFooter from '../components/SiteFooter'
 import { api } from '../api'
@@ -7,6 +8,7 @@ const ORDER_TABS=['All orders','Contracts','Options','Crypto ETF','Wallet Income
 
 export default function AccountPage({ i18n, user, onLogout, onUserRefresh }) {
   const {t}=i18n
+  const navigate=useNavigate()
   const [summary,setSummary]=useState(null)
   const [orders,setOrders]=useState([])
   const [funding,setFunding]=useState([])
@@ -64,10 +66,10 @@ export default function AccountPage({ i18n, user, onLogout, onUserRefresh }) {
 
     <h1>{t.settings}</h1><div className="settings-list">
       <button onClick={()=>setDialog('verification')}><span>{t.accountVerification}</span><b>{summary?.is_verified?t.verified:t.notVerified} ›</b></button>
-      <button onClick={()=>setDialog('invite')}><span>{t.inviteFriends}</span><b>›</b></button>
+      <button onClick={()=>navigate('/invite')}><span>{t.inviteFriends}</span><b>›</b></button>
       <button onClick={()=>setDialog('support')}><span>{t.contactWhatsapp}</span><b>›</b></button>
       <button onClick={()=>setDialog('support')}><span>{t.contactOnline}</span><b>›</b></button>
-      <button onClick={()=>setDialog('faq')}><span>{t.helpCenterFaq}</span><b>›</b></button>
+      <button onClick={()=>navigate('/help-center')}><span>{t.helpCenterFaq}</span><b>›</b></button>
       <button onClick={()=>setDialog('notifications')}><span>{t.notification}</span><b>›</b></button>
       <button onClick={()=>setDialog('password')}><span>{t.changePassword}</span><b>›</b></button>
       <button onClick={()=>setDialog('language')}><span>{t.changeLanguage}</span><b>›</b></button>

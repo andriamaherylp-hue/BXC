@@ -52,6 +52,9 @@ export default function LoginPage({ i18n, onLogin }) {
               <input
                 type="text"
                 autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 value={form.username}
                 onChange={(event) => setForm({ ...form, username: event.target.value })}
                 required

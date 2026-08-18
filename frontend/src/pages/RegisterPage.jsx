@@ -61,6 +61,9 @@ export default function RegisterPage({ i18n, onLogin }) {
               <input
                 type="text"
                 autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 maxLength={150}
                 value={form.username}
                 onChange={(event) => setForm({ ...form, username: event.target.value })}
@@ -73,6 +76,7 @@ export default function RegisterPage({ i18n, onLogin }) {
               <input
                 type="password"
                 autoComplete="new-password"
+                minLength={8}
                 value={form.password}
                 onChange={(event) => setForm({ ...form, password: event.target.value })}
                 required
