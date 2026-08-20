@@ -252,3 +252,10 @@ body{overflow-x:hidden}
 }
 
 .asset-login-art{display:flex;align-items:center;justify-content:center}.asset-login-art img{width:min(520px,100%);height:auto;filter:grayscale(1);opacity:.9}
+
+
+/* Logos WinRAR: préserver les logos rectangulaires sans les rogner */
+.market-icon.logo-wide{width:52px;border-radius:6px;overflow:hidden}
+.market-icon.logo-wide.large{width:70px;height:48px;border-radius:8px}
+.market-icon.logo-wide img{object-fit:contain;border-radius:0}
+@media(max-width:760px){.market-icon.logo-wide{width:44px;height:30px}.market-icon.logo-wide.large{width:58px;height:42px}}
