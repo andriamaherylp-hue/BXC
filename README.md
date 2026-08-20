@@ -8,9 +8,6 @@ React/Vite frontend + Django backend + PostgreSQL deployment for Render.
 - Username/password login with Django sessions.
 - No Gmail verification code and no phone/SMS registration flow.
 - Multilingual interface.
-- Responsive navigation and layouts optimized for iPhone, Android and desktop browsers.
-- Supplied BTC, ETH, SOL, DOGE, XRP and LTC artwork integrated into market lists.
-- Dedicated Invite Friends and Help Center pages linked from Account settings.
 - Post-login Home, Markets, Crypto ETF, Loan, Financial, Account and demo-order flows.
 - Staff-only BXC admin dashboard for account management and sandbox controls.
 - Django admin at `/django-admin/`.

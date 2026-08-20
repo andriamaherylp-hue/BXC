@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import AppHeader from '../components/AppHeader'
 import SiteFooter from '../components/SiteFooter'
@@ -9,17 +9,24 @@ import { MARKET_DATA, MARKET_TABS } from '../data/markets'
 export default function MarketPage({ i18n, user, onLogout }) {
   const {t}=i18n
   const [tab,setTab]=useState('crypto')
+  const scroller=useRef(null)
   const rows=useMemo(()=>MARKET_DATA[tab]||[],[tab])
   const featured=rows.slice(0,3)
+  const move=(dir)=>scroller.current?.scrollBy({left:dir*280,behavior:'smooth'})
+
   return <main className="app-page market-page">
     <AppHeader i18n={i18n} user={user} onLogout={onLogout}/>
-    <section className="market-shell">
+    <section className="market-shell reference-market">
       <h1>{t.markets}</h1>
       <div className="market-tabs">{MARKET_TABS.map(([key,label])=><button key={key} className={tab===key?'active':''} onClick={()=>setTab(key)}>{t[`tab_${key}`]||label}</button>)}</div>
-      <div className="featured-market-row">
-        {featured.map((item,i)=><Link key={item.code} className={`featured-market-card ${i===0?'selected':''}`} to={`/market/${tab}/${encodeURIComponent(item.code)}`}>
-          <MarketIcon item={item} large/><strong>{item.code}</strong><b>{item.price}</b><span className={item.change>=0?'positive':'negative'}>{item.change.toFixed(2)}%</span>
-        </Link>)}
+      <div className="featured-market-wrap">
+        <button className="market-scroll-arrow left" onClick={()=>move(-1)} aria-label="Scroll left">‹</button>
+        <div className="featured-market-row" ref={scroller}>
+          {featured.map((item,i)=><Link key={item.code} className={`featured-market-card ${i===0?'selected':''}`} to={`/market/${tab}/${encodeURIComponent(item.code)}`}>
+            <MarketIcon item={item} large/><strong>{item.code}</strong><b>{item.price}</b><span className={item.change>=0?'positive':'negative'}>{item.change.toFixed(2)}%</span>
+          </Link>)}
+        </div>
+        <button className="market-scroll-arrow right" onClick={()=>move(1)} aria-label="Scroll right">›</button>
       </div>
       <div className="fake-scrollbar"><span/></div>
       <div className="market-table-head"><span>{t.name}</span><span>24h%</span><span>{t.chart}</span><span>{t.price}</span></div>

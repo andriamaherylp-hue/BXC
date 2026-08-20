@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import Brand from '../components/Brand'
 import LanguageMenu from '../components/LanguageMenu'
+import loginArt from '../assets/bxc/login_art.svg'
 
 export default function LoginPage({ i18n, onLogin }) {
   const { language, setLanguage, t } = i18n
@@ -52,9 +53,6 @@ export default function LoginPage({ i18n, onLogin }) {
               <input
                 type="text"
                 autoComplete="username"
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck={false}
                 value={form.username}
                 onChange={(event) => setForm({ ...form, username: event.target.value })}
                 required
@@ -82,11 +80,8 @@ export default function LoginPage({ i18n, onLogin }) {
           <a className="contact-link" href="mailto:support@example.com">{t.contact}</a>
         </section>
 
-        <section className="auth-art login-art" aria-hidden="true">
-          <div className="id-card card-left"><div className="avatar" /><div className="tiny-line" /></div>
-          <div className="id-card card-main"><div className="avatar large" /><div className="tiny-line wide" /><div className="tiny-line" /></div>
-          <div className="id-card card-right"><div className="avatar" /><div className="tiny-line" /></div>
-          <div className="magnifier"><div className="lens" /><div className="handle" /></div>
+        <section className="auth-art login-art asset-login-art" aria-hidden="true">
+          <img src={loginArt} alt="" />
         </section>
       </div>
 

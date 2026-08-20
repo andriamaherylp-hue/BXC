@@ -15,12 +15,14 @@ from django.middleware.csrf import get_token
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST, require_http_methods
 
-from .models import AdminAuditLog, DemoOrder, FundingRequest, Profile, SandboxTransaction
+from .models import AdminAuditLog, DemoOrder, FundingRequest, Profile, SandboxAssetBalance, SandboxTransaction
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
 ALLOWED_CATEGORIES = {'crypto', 'forex', 'stocks', 'futures'}
 ALLOWED_MODES = {'options', 'futures', 'spot'}
+ALLOWED_DIRECTIONS = {'call', 'put'}
+EXCHANGE_RATES = {'BTC': Decimal('64775.99'), 'ETH': Decimal('1914.86'), 'SOL': Decimal('76.93'), 'USDT': Decimal('1'), 'USDC': Decimal('1')}
 BALANCE_FIELDS = {
     'trading': 'demo_trading_balance',
     'spot': 'demo_spot_balance',
@@ -135,6 +137,31 @@ def adjust_balance_locked(profile, account_type, amount):
     setattr(profile, field, new_value)
     profile.save(update_fields=[field])
     return new_value
+
+
+def get_asset_balance_locked(user, account_type, asset):
+    if account_type not in {'spot', 'finance'}:
+        raise ValueError('Flash exchange is available only for spot or finance sandbox accounts.')
+    asset = str(asset).upper()
+    if asset == 'USDT':
+        profile = Profile.objects.select_for_update().get(user=user)
+        return profile, None
+    if asset not in {'BTC', 'ETH', 'SOL', 'USDC'}:
+        raise ValueError('Unsupported sandbox asset.')
+    item, _ = SandboxAssetBalance.objects.select_for_update().get_or_create(
+        user=user,
+        account_type=account_type,
+        asset=asset,
+        defaults={'amount': Decimal('0.00000000')},
+    )
+    return None, item
+
+
+def sandbox_assets_json(user):
+    result = {'spot': {}, 'finance': {}}
+    for item in SandboxAssetBalance.objects.filter(user=user):
+        result[item.account_type][item.asset] = f'{item.amount:.8f}'
+    return result
 
 
 @require_GET
@@ -279,17 +306,23 @@ def funding_requests(request):
         return JsonResponse({'error': str(exc)}, status=400)
 
     profile = ensure_profile(request.user)
+    asset = str(data.get('asset', 'USDT')).strip().upper()[:16] or 'USDT'
     if kind == 'withdrawal':
         if profile.withdrawals_blocked:
             return JsonResponse({'error': 'Sandbox withdrawals are disabled for this account. Contact support.'}, status=403)
-        if getattr(profile, BALANCE_FIELDS[account_type]) < amount:
+        if asset != 'USDT' and asset in EXCHANGE_RATES and account_type in {'spot', 'finance'}:
+            quantity = (amount / EXCHANGE_RATES[asset]).quantize(Decimal('0.00000001'))
+            asset_row = SandboxAssetBalance.objects.filter(user=request.user, account_type=account_type, asset=asset).first()
+            if not asset_row or asset_row.amount < quantity:
+                return JsonResponse({'error': 'Insufficient sandbox asset balance for this request.'}, status=400)
+        elif getattr(profile, BALANCE_FIELDS[account_type]) < amount:
             return JsonResponse({'error': 'Insufficient sandbox balance for this request.'}, status=400)
 
     item = FundingRequest.objects.create(
         user=request.user,
         kind=kind,
         account_type=account_type,
-        asset=str(data.get('asset', 'USDT')).strip()[:16] or 'USDT',
+        asset=asset,
         network=str(data.get('network', 'USDT-TRC20')).strip()[:32] or 'USDT-TRC20',
         address=str(data.get('address', '')).strip()[:255],
         amount=amount,
@@ -318,6 +351,133 @@ def funding_request_json(item):
     }
 
 
+@require_GET
+@auth_required
+def account_assets(request):
+    return JsonResponse({'assets': sandbox_assets_json(request.user)})
+
+
+@require_POST
+@auth_required
+def account_transfer(request):
+    data = body(request)
+    from_account = str(data.get('from_account', '')).lower()
+    to_account = str(data.get('to_account', '')).lower()
+    if from_account == to_account:
+        return JsonResponse({'error': 'Choose two different sandbox accounts.'}, status=400)
+    if from_account not in BALANCE_FIELDS or to_account not in BALANCE_FIELDS:
+        return JsonResponse({'error': 'Invalid sandbox account selection.'}, status=400)
+    try:
+        amount = decimal_value(data.get('amount'), minimum='0.01', maximum='100000000')
+    except ValueError as exc:
+        return JsonResponse({'error': str(exc)}, status=400)
+
+    with transaction.atomic():
+        profile = Profile.objects.select_for_update().get(user=request.user)
+        try:
+            adjust_balance_locked(profile, from_account, -amount)
+            adjust_balance_locked(profile, to_account, amount)
+        except ValueError as exc:
+            return JsonResponse({'error': str(exc)}, status=400)
+        SandboxTransaction.objects.create(
+            user=request.user,
+            transaction_type='admin_adjustment',
+            account_type=from_account,
+            amount=-amount,
+            asset='USDT',
+            note=f'Internal sandbox transfer to {to_account}',
+            created_by=request.user,
+        )
+        SandboxTransaction.objects.create(
+            user=request.user,
+            transaction_type='admin_adjustment',
+            account_type=to_account,
+            amount=amount,
+            asset='USDT',
+            note=f'Internal sandbox transfer from {from_account}',
+            created_by=request.user,
+        )
+
+    profile.refresh_from_db()
+    return JsonResponse({'ok': True, 'balances': balances_json(profile)})
+
+
+@require_POST
+@auth_required
+def flash_exchange(request):
+    data = body(request)
+    account_type = str(data.get('account_type', 'spot')).lower()
+    from_asset = str(data.get('from_asset', '')).upper()
+    to_asset = str(data.get('to_asset', '')).upper()
+    if account_type not in {'spot', 'finance'}:
+        return JsonResponse({'error': 'Invalid sandbox account type.'}, status=400)
+    if from_asset == to_asset:
+        return JsonResponse({'error': 'Choose two different sandbox assets.'}, status=400)
+    if from_asset not in EXCHANGE_RATES or to_asset not in EXCHANGE_RATES:
+        return JsonResponse({'error': 'Unsupported sandbox asset.'}, status=400)
+    try:
+        quantity = Decimal(str(data.get('quantity', '0')))
+    except (InvalidOperation, TypeError, ValueError):
+        return JsonResponse({'error': 'Enter a valid sandbox quantity.'}, status=400)
+    if quantity <= 0:
+        return JsonResponse({'error': 'Enter a valid sandbox quantity.'}, status=400)
+
+    usdt_value = quantity * EXCHANGE_RATES[from_asset]
+    to_quantity = (usdt_value / EXCHANGE_RATES[to_asset]).quantize(Decimal('0.00000001'))
+
+    with transaction.atomic():
+        profile = Profile.objects.select_for_update().get(user=request.user)
+
+        if from_asset == 'USDT':
+            try:
+                adjust_balance_locked(profile, account_type, -usdt_value.quantize(Decimal('0.01')))
+            except ValueError as exc:
+                return JsonResponse({'error': str(exc)}, status=400)
+        else:
+            source, _ = SandboxAssetBalance.objects.select_for_update().get_or_create(
+                user=request.user,
+                account_type=account_type,
+                asset=from_asset,
+                defaults={'amount': Decimal('0.00000000')},
+            )
+            if source.amount < quantity:
+                return JsonResponse({'error': 'Insufficient sandbox asset balance.'}, status=400)
+            source.amount = (source.amount - quantity).quantize(Decimal('0.00000001'))
+            source.save(update_fields=['amount'])
+
+        if to_asset == 'USDT':
+            adjust_balance_locked(profile, account_type, usdt_value.quantize(Decimal('0.01')))
+        else:
+            target, _ = SandboxAssetBalance.objects.select_for_update().get_or_create(
+                user=request.user,
+                account_type=account_type,
+                asset=to_asset,
+                defaults={'amount': Decimal('0.00000000')},
+            )
+            target.amount = (target.amount + to_quantity).quantize(Decimal('0.00000001'))
+            target.save(update_fields=['amount'])
+
+        SandboxTransaction.objects.create(
+            user=request.user,
+            transaction_type='admin_adjustment',
+            account_type=account_type,
+            amount=Decimal('0.00'),
+            asset=from_asset,
+            note=f'Flash exchange {quantity} {from_asset} to {to_quantity} {to_asset} in sandbox',
+            created_by=request.user,
+        )
+
+    return JsonResponse({
+        'ok': True,
+        'from_asset': from_asset,
+        'to_asset': to_asset,
+        'from_amount': f'{quantity:.8f}',
+        'to_amount': f'{to_quantity:.8f}',
+        'assets': sandbox_assets_json(request.user),
+        'balances': balances_json(Profile.objects.get(user=request.user)),
+    })
+
+
 def demo_order_json(order):
     return {
         'id': order.id,
@@ -328,6 +488,7 @@ def demo_order_json(order):
         'market_code': order.market_code,
         'category': order.category,
         'mode': order.mode,
+        'direction': order.direction,
         'duration': order.duration,
         'investment': f'{order.investment:.2f}',
         'status': order.status,
@@ -350,12 +511,13 @@ def demo_orders(request):
     market_code = str(data.get('market_code', '')).strip()[:32]
     category = str(data.get('category', '')).lower()
     mode = str(data.get('mode', '')).lower()
+    direction = str(data.get('direction', 'call')).lower()
     try:
         duration = int(data.get('duration', 60))
         investment = decimal_value(data.get('investment', '0'), minimum='0.01', maximum='10000000')
     except (ValueError, TypeError):
         return JsonResponse({'error': 'Invalid demo order values.'}, status=400)
-    if not market_code or category not in ALLOWED_CATEGORIES or mode not in ALLOWED_MODES:
+    if not market_code or category not in ALLOWED_CATEGORIES or mode not in ALLOWED_MODES or direction not in ALLOWED_DIRECTIONS:
         return JsonResponse({'error': 'Invalid demo market selection.'}, status=400)
     if duration not in {60, 90, 120, 180}:
         return JsonResponse({'error': 'Invalid demo duration.'}, status=400)
@@ -365,6 +527,7 @@ def demo_orders(request):
         market_code=market_code,
         category=category,
         mode=mode,
+        direction=direction,
         duration=duration,
         investment=investment,
     )
@@ -648,7 +811,25 @@ def admin_review_funding(request, request_id):
                         return JsonResponse({'error': 'Sandbox withdrawals are disabled for this account.'}, status=409)
                     signed_amount = -item.amount
                     transaction_type = 'withdrawal_approved'
-                adjust_balance_locked(profile, item.account_type, signed_amount)
+
+                if item.asset != 'USDT' and item.asset in EXCHANGE_RATES and item.account_type in {'spot', 'finance'}:
+                    quantity = (item.amount / EXCHANGE_RATES[item.asset]).quantize(Decimal('0.00000001'))
+                    asset_row, _ = SandboxAssetBalance.objects.select_for_update().get_or_create(
+                        user=item.user,
+                        account_type=item.account_type,
+                        asset=item.asset,
+                        defaults={'amount': Decimal('0.00000000')},
+                    )
+                    if item.kind == 'withdrawal':
+                        if asset_row.amount < quantity:
+                            return JsonResponse({'error': 'Insufficient sandbox asset balance.'}, status=409)
+                        asset_row.amount = (asset_row.amount - quantity).quantize(Decimal('0.00000001'))
+                    else:
+                        asset_row.amount = (asset_row.amount + quantity).quantize(Decimal('0.00000001'))
+                    asset_row.save(update_fields=['amount'])
+                else:
+                    adjust_balance_locked(profile, item.account_type, signed_amount)
+
                 SandboxTransaction.objects.create(
                     user=item.user,
                     transaction_type=transaction_type,

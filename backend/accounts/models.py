@@ -60,6 +60,7 @@ class DemoOrder(models.Model):
     market_code = models.CharField(max_length=32)
     category = models.CharField(max_length=16)
     mode = models.CharField(max_length=16)
+    direction = models.CharField(max_length=8, choices=[('call','Call/Long'),('put','Put/Short')], default='call')
     duration = models.PositiveIntegerField(default=60)
     investment = models.DecimalField(max_digits=18, decimal_places=2)
     status = models.CharField(max_length=16, choices=STATUSES, default='open')
@@ -139,6 +140,26 @@ class SandboxTransaction(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+
+
+class SandboxAssetBalance(models.Model):
+    ACCOUNTS = [('spot', 'Spot'), ('finance', 'Finance')]
+    ASSETS = [('BTC','BTC'),('ETH','ETH'),('SOL','SOL'),('USDC','USDC')]
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='sandbox_asset_balances')
+    account_type = models.CharField(max_length=16, choices=ACCOUNTS)
+    asset = models.CharField(max_length=16, choices=ASSETS)
+    amount = models.DecimalField(max_digits=28, decimal_places=8, default=Decimal('0.00000000'))
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['user','account_type','asset'], name='unique_sandbox_asset_balance')
+        ]
+        ordering = ['account_type','asset']
+
+    def __str__(self):
+        return f'{self.user.username} {self.account_type} {self.asset}: {self.amount}'
 
 
 class AdminAuditLog(models.Model):

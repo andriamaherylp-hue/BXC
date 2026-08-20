@@ -13,8 +13,9 @@ import LoanPage from './pages/LoanPage'
 import FinancialPage from './pages/FinancialPage'
 import AccountPage from './pages/AccountPage'
 import AdminPage from './pages/AdminPage'
-import InviteFriendsPage from './pages/InviteFriendsPage'
+import InvitePage from './pages/InvitePage'
 import HelpCenterPage from './pages/HelpCenterPage'
+import BalancePage from './pages/BalancePage'
 
 function AppRoutes() {
   const i18n = useI18n()
@@ -41,9 +42,10 @@ function AppRoutes() {
     <Route path="/loan" element={user?<LoanPage {...protectedProps}/>:<Navigate to="/" replace/>}/>
     <Route path="/financial" element={user?<FinancialPage {...protectedProps}/>:<Navigate to="/" replace/>}/>
     <Route path="/account" element={user?<AccountPage {...protectedProps}/>:<Navigate to="/" replace/>}/>
-    <Route path="/invite" element={user?<InviteFriendsPage {...protectedProps}/>:<Navigate to="/" replace/>}/>
-    <Route path="/help-center" element={user?<HelpCenterPage {...protectedProps}/>:<Navigate to="/" replace/>}/>
     <Route path="/admin" element={user?<AdminPage {...protectedProps}/>:<Navigate to="/" replace/>}/>
+    <Route path="/invite" element={user?<InvitePage {...protectedProps}/>:<Navigate to="/" replace/>}/>
+    <Route path="/help-center" element={user?<HelpCenterPage {...protectedProps}/>:<Navigate to="/" replace/>}/>
+    <Route path="/balance" element={user?<BalancePage {...protectedProps}/>:<Navigate to="/" replace/>}/>
     <Route path="*" element={<Navigate to={user?'/home':'/'} replace/>}/>
   </Routes>
 }

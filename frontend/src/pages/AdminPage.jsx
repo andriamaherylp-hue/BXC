@@ -304,12 +304,12 @@ export default function AdminPage({ i18n, user, onLogout }) {
         <section className="admin-list-card">
           <h3>Pending sandbox withdrawals</h3>
           {activity.funding_requests.filter((item) => item.kind === 'withdrawal').length === 0 && <p className="admin-muted">No pending withdrawal</p>}
-          {activity.funding_requests.filter((item) => item.kind === 'withdrawal').map((item) => <div className="pending-card" key={item.id}><div><b>{item.email || item.username}</b><span>{item.account_code} · {item.amount} {item.asset}</span><small>{item.address || item.network}</small></div><div className="pending-actions"><button className="admin-primary" onClick={() => reviewFunding(item, 'approve')}>Approve</button><button className="admin-danger" onClick={() => reviewFunding(item, 'reject')}>Reject</button></div></div>)}
+          {activity.funding_requests.filter((item) => item.kind === 'withdrawal').map((item) => <div className="pending-card" key={item.id}><div><b>{item.email || item.username}</b><span>{item.account_code} · {item.amount} USDT eq. · {item.asset}</span><small>{item.address || item.network}</small></div><div className="pending-actions"><button className="admin-primary" onClick={() => reviewFunding(item, 'approve')}>Approve</button><button className="admin-danger" onClick={() => reviewFunding(item, 'reject')}>Reject</button></div></div>)}
         </section>
         <section className="admin-list-card">
           <h3>Pending sandbox deposits</h3>
           {activity.funding_requests.filter((item) => item.kind === 'deposit').length === 0 && <p className="admin-muted">No pending deposit</p>}
-          {activity.funding_requests.filter((item) => item.kind === 'deposit').map((item) => <div className="pending-card" key={item.id}><div><b>{item.email || item.username}</b><span>{item.account_code} · {item.amount} {item.asset}</span><small>{item.network}</small></div><div className="pending-actions"><button className="admin-primary" onClick={() => reviewFunding(item, 'approve')}>Approve</button><button className="admin-danger" onClick={() => reviewFunding(item, 'reject')}>Reject</button></div></div>)}
+          {activity.funding_requests.filter((item) => item.kind === 'deposit').map((item) => <div className="pending-card" key={item.id}><div><b>{item.email || item.username}</b><span>{item.account_code} · {item.amount} USDT eq. · {item.asset}</span><small>{item.network}</small></div><div className="pending-actions"><button className="admin-primary" onClick={() => reviewFunding(item, 'approve')}>Approve</button><button className="admin-danger" onClick={() => reviewFunding(item, 'reject')}>Reject</button></div></div>)}
         </section>
       </div>
 
@@ -318,7 +318,7 @@ export default function AdminPage({ i18n, user, onLogout }) {
         {activity.open_orders.length === 0 && <p className="admin-muted">No open demo trade order</p>}
         <div className="open-orders-grid">
           {activity.open_orders.map((order) => <form className="trade-close-card" onSubmit={(e) => closeOrder(e, order)} key={order.id}>
-            <div><b>{order.email || order.username}</b><small>{order.account_code} · {order.market_code} · {order.mode} · {order.investment} DEMO USDT</small></div>
+            <div><b>{order.email || order.username}</b><small>{order.account_code} · {order.market_code} · {order.mode} · {order.direction || 'call'} · {order.investment} DEMO USDT</small></div>
             <select name="result" defaultValue="win"><option value="win">Win</option><option value="loss">Loss</option><option value="cancelled">Cancelled</option></select>
             <input name="pnl" type="number" step="0.01" min="0" defaultValue="0" placeholder="Profit / loss amount" />
             <input name="close_price" type="number" step="0.00000001" placeholder="Close price" />

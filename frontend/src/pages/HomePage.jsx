@@ -1,38 +1,30 @@
 import { Link } from 'react-router-dom'
 import AppHeader from '../components/AppHeader'
 import SiteFooter from '../components/SiteFooter'
-
-function PhoneMock({ detail=false }) {
-  return <div className={`home-phone ${detail?'detail-phone':''}`}>
-    <div className="home-phone-status"><span>9:41</span><span>◔ ◔ ▰</span></div>
-    <div className="home-phone-title">{detail?'BTC/USD':'Markets'}</div>
-    {detail ? <>
-      <div className="phone-summary"><b>133,546 USDT</b><small>-2.46%</small></div>
-      <div className="phone-candle-grid">{Array.from({length:23}).map((_,i)=><i key={i} className={i%3===0?'green':''} style={{height:`${30+((i*17)%90)}px`}}/>)}</div>
-      <div className="phone-bottom-buttons"><span>Futures</span><span>Options</span></div>
-      <div className="phone-black-row"/><div className="phone-black-row"/><div className="phone-black-row"/>
-    </> : <>
-      <div className="phone-tabs"><b>Watchlist</b><span>Forex</span><span>Crypto</span></div>
-      <div className="phone-asset-cards"><span>BTC<br/><b>$17,147</b></span><span>ETH<br/><b>$1,262</b></span><span>DASH<br/><b>$46.68</b></span></div>
-      <div className="phone-list">{Array.from({length:5}).map((_,i)=><div key={i}><span>BTC</span><em className={i%2?'red':'green'}>⌁⌁⌁</em><small>$17,147</small></div>)}</div>
-    </>}
-  </div>
-}
+import iphone1 from '../assets/bxc/home_iphone1.svg'
+import iphone2 from '../assets/bxc/home_iphone2.svg'
+import appStore from '../assets/bxc/app_store.svg'
 
 export default function HomePage({ i18n, user, onLogout }) {
   const { t }=i18n
   return <main className="app-page home-page">
     <AppHeader i18n={i18n} user={user} onLogout={onLogout}/>
-    <section className="home-hero">
+    <section className="home-hero reference-home">
       <div className="home-copy">
         <h1>{t.heroHeadline}</h1>
-        <button className="app-store-button"><span>●</span><span><small>{t.availableOn}</small><b>App Store</b></span></button>
+        <button className="app-store-button">
+          <img src={appStore} alt="" />
+          <span><small>{t.availableOn}</small><b>App Store</b></span>
+        </button>
         <div className="home-point-list">
           <div><span className="twinkle">✧</span><div><h3>{t.application}</h3><p>{t.applicationText}</p></div></div>
           <div><span className="twinkle">✧</span><div><h3>{t.cryptoDeposit}</h3><p>{t.cryptoDepositText}</p></div></div>
         </div>
       </div>
-      <div className="home-visual"><PhoneMock/><PhoneMock detail/></div>
+      <div className="home-visual reference-phone-art" aria-hidden="true">
+        <img className="home-phone-image small" src={iphone1} alt="" />
+        <img className="home-phone-image large" src={iphone2} alt="" />
+      </div>
     </section>
 
     <section className="home-stats">

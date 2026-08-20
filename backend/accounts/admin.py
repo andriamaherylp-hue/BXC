@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import AdminAuditLog, DemoOrder, FundingRequest, Profile, SandboxTransaction
+from .models import AdminAuditLog, DemoOrder, FundingRequest, Profile, SandboxAssetBalance, SandboxTransaction
 
 
 @admin.register(Profile)
@@ -15,7 +15,7 @@ class ProfileAdmin(admin.ModelAdmin):
 
 @admin.register(DemoOrder)
 class DemoOrderAdmin(admin.ModelAdmin):
-    list_display = ('user', 'market_code', 'mode', 'investment', 'status', 'pnl', 'created_at', 'closed_at')
+    list_display = ('user', 'market_code', 'mode', 'direction', 'investment', 'status', 'pnl', 'created_at', 'closed_at')
     list_filter = ('status', 'category', 'mode')
     search_fields = ('user__username', 'market_code')
     readonly_fields = [field.name for field in DemoOrder._meta.fields]
@@ -73,3 +73,10 @@ class AdminAuditLogAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+@admin.register(SandboxAssetBalance)
+class SandboxAssetBalanceAdmin(admin.ModelAdmin):
+    list_display = ('user', 'account_type', 'asset', 'amount', 'updated_at')
+    list_filter = ('account_type', 'asset')
+    search_fields = ('user__username', 'user__email')
